@@ -19,6 +19,8 @@ project(sapi_libraw CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+set(SAPI_ROOT "" CACHE PATH "Path to the Sandboxed API source tree")
+
 if(NOT TARGET sapi::sapi)
   set(SAPI_ROOT "../.." CACHE PATH "Path to the Sandboxed API source tree")
   add_subdirectory(
@@ -70,15 +72,15 @@ endif()
 add_library(
   libraw STATIC
 
-  "${libraw_SOURCE_DIR}/internal/libraw_internal_funcs.h"
-  "${libraw_SOURCE_DIR}/internal/dcraw_defs.h"
-  "${libraw_SOURCE_DIR}/internal/dcraw_fileio_defs.h"
-  "${libraw_SOURCE_DIR}/internal/defines.h"
-  "${libraw_SOURCE_DIR}/internal/dmp_include.h"
-  "${libraw_SOURCE_DIR}/internal/libraw_cameraids.h"
-  "${libraw_SOURCE_DIR}/internal/libraw_cxx_defs.h"
-  "${libraw_SOURCE_DIR}/internal/var_defines.h"
-  "${libraw_SOURCE_DIR}/internal/x3f_tools.h"
+#  "${libraw_SOURCE_DIR}/internal/libraw_internal_funcs.h"
+#  "${libraw_SOURCE_DIR}/internal/dcraw_defs.h"
+#  "${libraw_SOURCE_DIR}/internal/dcraw_fileio_defs.h"
+#  "${libraw_SOURCE_DIR}/internal/defines.h"
+#  "${libraw_SOURCE_DIR}/internal/dmp_include.h"
+#  "${libraw_SOURCE_DIR}/internal/libraw_cameraids.h"
+#  "${libraw_SOURCE_DIR}/internal/libraw_cxx_defs.h"
+#  "${libraw_SOURCE_DIR}/internal/var_defines.h"
+#  "${libraw_SOURCE_DIR}/internal/x3f_tools.h"
   "${libraw_SOURCE_DIR}/libraw/libraw.h"
   "${libraw_SOURCE_DIR}/libraw/libraw_alloc.h"
   "${libraw_SOURCE_DIR}/libraw/libraw_const.h"
@@ -86,6 +88,83 @@ add_library(
   "${libraw_SOURCE_DIR}/libraw/libraw_internal.h"
   "${libraw_SOURCE_DIR}/libraw/libraw_types.h"
   "${libraw_SOURCE_DIR}/libraw/libraw_version.h"
+  "${libraw_SOURCE_DIR}/src/metadata/pentax.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/samsung.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/makernotes.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/p1.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/kodak.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/misc_parsers.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/hasselblad_model.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/leica.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/identify_tools.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/fuji.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/epson.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/minolta.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/mediumformat.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/adobepano.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/canon.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/nikon.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/olympus.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/tiff.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/normalize_model.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/exif_gps.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/cr3_parser.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/ciff.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/identify.cpp"
+  "${libraw_SOURCE_DIR}/src/metadata/sony.cpp"
+  "${libraw_SOURCE_DIR}/src/x3f/x3f_parse_process.cpp"
+  "${libraw_SOURCE_DIR}/src/x3f/x3f_utils_patched.cpp"
+  "${libraw_SOURCE_DIR}/src/write/apply_profile.cpp"
+  "${libraw_SOURCE_DIR}/src/write/file_write.cpp"
+#  "${libraw_SOURCE_DIR}/src/write/write_ph.cpp"
+  "${libraw_SOURCE_DIR}/src/write/tiff_writer.cpp"
+  "${libraw_SOURCE_DIR}/src/preprocessing/ext_preprocess.cpp"
+#  "${libraw_SOURCE_DIR}/src/preprocessing/preprocessing_ph.cpp"
+  "${libraw_SOURCE_DIR}/src/preprocessing/raw2image.cpp"
+  "${libraw_SOURCE_DIR}/src/preprocessing/subtract_black.cpp"
+  "${libraw_SOURCE_DIR}/src/demosaic/aahd_demosaic.cpp"
+  "${libraw_SOURCE_DIR}/src/demosaic/xtrans_demosaic.cpp"
+  "${libraw_SOURCE_DIR}/src/demosaic/misc_demosaic.cpp"
+  "${libraw_SOURCE_DIR}/src/demosaic/dcb_demosaic.cpp"
+  "${libraw_SOURCE_DIR}/src/demosaic/ahd_demosaic.cpp"
+  "${libraw_SOURCE_DIR}/src/demosaic/dht_demosaic.cpp"
+  "${libraw_SOURCE_DIR}/src/integration/dngsdk_glue.cpp"
+  "${libraw_SOURCE_DIR}/src/integration/rawspeed_glue.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/curves.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/utils_dcraw.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/init_close_utils.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/read_utils.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/decoder_info.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/open.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/phaseone_processing.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/thumb_utils.cpp"
+  "${libraw_SOURCE_DIR}/src/utils/utils_libraw.cpp"
+  "${libraw_SOURCE_DIR}/src/postprocessing/dcraw_process.cpp"
+#  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_ph.cpp"
+  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_utils.cpp"
+  "${libraw_SOURCE_DIR}/src/postprocessing/mem_image.cpp"
+  "${libraw_SOURCE_DIR}/src/postprocessing/aspect_ratio.cpp"
+  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_utils_dcrdefs.cpp"
+  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_aux.cpp"
+  "${libraw_SOURCE_DIR}/src/tables/cameralist.cpp"
+  "${libraw_SOURCE_DIR}/src/tables/colordata.cpp"
+  "${libraw_SOURCE_DIR}/src/tables/colorconst.cpp"
+  "${libraw_SOURCE_DIR}/src/tables/wblists.cpp"
+  "${libraw_SOURCE_DIR}/src/libraw_c_api.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/smal.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/decoders_dcraw.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/generic.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/fuji_compressed.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/decoders_libraw.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/unpack_thumb.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/kodak_decoders.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/dng.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/canon_600.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/decoders_libraw_dcrdefs.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/crx.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/fp_dng.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/unpack.cpp"
+  "${libraw_SOURCE_DIR}/src/decoders/load_mfbacks.cpp"
   "${libraw_SOURCE_DIR}/src/libraw_datastream.cpp"
 )
 
@@ -99,7 +178,7 @@ add_sapi_library(
   sapi_libraw
 
   FUNCTIONS
-    libraw_init
+    libraw_strprogress
     libraw_init
     libraw_open_file
     libraw_open_file_ex
@@ -120,7 +199,6 @@ add_sapi_library(
     libraw_cameraCount
     libraw_set_memerror_handler
     libraw_set_exifparser_handler
-    exif_parser_callback cb,
     libraw_set_dataerror_handler
     libraw_set_progress_handler
     libraw_unpack_function_name
@@ -131,9 +209,8 @@ add_sapi_library(
     libraw_dcraw_ppm_tiff_writer
     libraw_dcraw_thumb_writer
     libraw_dcraw_process
-    libraw_processed_image_t *
+    libraw_processed_image_t
     libraw_dcraw_make_mem_image
-    libraw_processed_image_t *
     libraw_dcraw_make_mem_thumb
     libraw_dcraw_clear_mem
     libraw_set_demosaic
@@ -166,18 +243,15 @@ add_sapi_library(
   NAMESPACE ""
 )
 
-add_library(sapi_contrib::libraw ALIAS sapi_libraw)
-
 target_include_directories(
   sapi_libraw INTERFACE
 
   "${PROJECT_BINARY_DIR}"
-  "${SAPI_SOURCE_DIR}"
 )
 
-#if(SAPI_ENABLE_EXAMPLES)
-#    add_subdirectory(example)
-#endif()
+if(SAPI_ENABLE_EXAMPLES)
+    add_subdirectory(example)
+endif()
 
 #if(SAPI_ENABLE_TESTS)
 #    add_subdirectory(test)

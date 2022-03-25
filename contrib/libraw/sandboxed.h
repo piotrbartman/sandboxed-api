@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef CONTRIB_CBLOSC_SANDBOXED_H_
-#define CONTRIB_CBLOSC_SANDBOXED_H_
+#ifndef CONTRIB_LIBRAW_SANDBOXED_H_
+#define CONTRIB_LIBRAW_SANDBOXED_H_
 
 #include <libgen.h>
 #include <syscall.h>
@@ -24,19 +24,27 @@
 
 class LibRawSapiSandbox : public LibRawSandbox {
  public:
+  explicit LibRawSapiSandbox(std::string file_name)
+      : file_name_(std::move(file_name)) {}
+
+ private:
   std::unique_ptr<sandbox2::Policy> ModifyPolicy(
       sandbox2::PolicyBuilder*) override {
     return sandbox2::PolicyBuilder()
         .AllowStaticStartup()
+        .AllowDynamicStartup()
+        .AllowOpen()
         .AllowRead()
         .AllowWrite()
-        .AllowExit()
         .AllowSystemMalloc()
-        .AllowSyscalls({
-            __NR_sysinfo,
-        })
+        .AllowExit()
+        .AddFile(file_name_, /*is_ro=*/true)
+        .AllowRestartableSequencesWithProcFiles(
+            sandbox2::PolicyBuilder::kAllowSlowFences)  // hangs without it?
         .BuildOrDie();
   }
+
+  std::string file_name_;
 };
 
-#endif  // CONTRIB_CBLOSC_SANDBOXED_
+#endif  // CONTRIB_LIBRAW_SANDBOXED_
