@@ -36,11 +36,6 @@ it under the terms of the one of two licenses as you choose:
 #include <string.h>
 #include <math.h>
 #include <iostream>
-#ifndef WIN32
-#include <netinet/in.h>
-#else
-#include <winsock2.h>
-#endif
 
 #include "contrib/libraw/sandboxed.h"
 
@@ -98,36 +93,66 @@ int main(int ac, char *av[])
     return EXIT_FAILURE;
   }
   LibRawApi api(&sandbox);
-  absl::StatusOr<libraw_data_t*> status_or_lr = api.libraw_init(0);
-  if (!status_or_lr.ok()) {
+
+  absl::StatusOr<libraw_data_t*> lr = api.libraw_init(0);
+  if (!lr.ok()) {
     std::cerr << "Unable to init LibRaw\n";
     return EXIT_FAILURE;
   }
-  libraw_data_t* lr = status_or_lr.value();
+//  libraw_data_t* lr = status_or_lr.value();
 //  LibRaw_bl lr;
-  sapi::v::RemotePtr slr(*status_or_lr);
+  sapi::v::RemotePtr plr(*lr);
+//  sapi::v::Struct<libraw_data_t> var(&lr);
 
-  if (absl::StatusOr<int> response =
-          api.libraw_open_file(&slr, file_name.PtrBefore());
-      !response.ok() or response.value() != 0
-      )
+//  absl::StatusOr<char *> response = api.libraw_version();
+//
+//  if (response.ok()) {
+//
+////    printf("%i", *response);
+//    char * version = response.value();
+////    if (version == NULL)
+//    std::cout << (void *) version;
+//    std::cout << ":)";
+////    std::cout << *response;
+//  } else {
+//    std::cout << ":(";
+//  }
   {
-    fprintf(stderr, "Unable to open file %s\n", av[1]);
-    exit(1);
+    absl::StatusOr<int> response =
+        api.libraw_open_file(&plr, file_name.PtrBefore());
+    //  absl::StatusOr<int> response = api.libraw_versionNumber();
+
+    if (!response.ok()) {
+      fprintf(stderr, "SAPI Unable to open file %s\n", av[1]);
+      exit(1);
+    }
+
+    if (*response != 0) {
+      fprintf(stderr, "LibRaw Unable to open file %s\n", av[1]);
+      exit(1);
+    }
   }
-//  if ((lr->idata.colors == 1 && channel>0) || (channel >3))
+
+//  sapi::v::Struct<libraw_data_t> lr_struct;
+  sapi::v::UInt value(0);
+
+  SAPI_ASSIGN_OR_RETURN(absl::StatusOr<libraw_data_t *>, api.libraw_init(0));
+
+//  if (((plr)->idata.colors == 1 && channel>0) || (channel >3))
 //  {
 //    fprintf(stderr, "Incorrect CHANNEL specified: %d\n", channel);
 //    exit(1);
 //  }
-//  if (api.libraw_unpack(&slr) != 0)
-//  {
-//    fprintf(stderr, "Unable to unpack raw data from %s\n", av[1]);
-//    exit(1);
-//  }
-////  lr.adjust_blacklevel();
-//  printf("%s\t%d-%d-%dx%d\tchannel: %d\n", av[1], colstart, rowstart, width, height, channel);
-//
+  {
+    absl::StatusOr<int> response = api.libraw_unpack(&plr);
+    if (!response.ok() or *response != 0) {
+      fprintf(stderr, "Unable to unpack raw data from %s\n", av[1]);
+      exit(1);
+    }
+  }
+//  lr.adjust_blacklevel();
+  printf("%s\t%d-%d-%dx%d\tchannel: %d\n", av[1], colstart, rowstart, width, height, channel);
+
 //  printf("%6s", "R\\C");
 //  for (int col = colstart; col < colstart + width && col < lr->sizes.raw_width; col++)
 //    printf("%6u", col);
@@ -175,4 +200,6 @@ int main(int ac, char *av[])
 //  }
 //  else
 //    printf("Unsupported file data (e.g. floating point format), or incorrect channel specified\n");
+  api.libraw_close(&plr).IgnoreError();
+  return EXIT_SUCCESS;
 }

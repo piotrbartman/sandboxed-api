@@ -731,6 +731,18 @@ class Generator(object):
     functions = self._get_functions(function_names)
     related_types = [(t.stringify() + ';') for t in related_types]
     defines = self._get_defines()
+    defines.append('#define __STD_TYPE typedef')
+    malformed = related_types[3]
+    malformed = malformed[len("typedef\n#else\n#error\n#endif\n#include < bits / typesizes . h >\n"):]
+    typedefs = malformed.split("\n")
+    # related_types += typedefs
+    related_types.pop(3)
+    # print(defines)
+    # print("_" * 80)
+    # print(forward_decls)
+    # print("_" * 80)
+    # print(related_types)
+    # print("_" * 80)
 
     api = {
         'name': name,

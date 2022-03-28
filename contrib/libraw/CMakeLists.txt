@@ -72,15 +72,15 @@ endif()
 add_library(
   libraw STATIC
 
-#  "${libraw_SOURCE_DIR}/internal/libraw_internal_funcs.h"
-#  "${libraw_SOURCE_DIR}/internal/dcraw_defs.h"
-#  "${libraw_SOURCE_DIR}/internal/dcraw_fileio_defs.h"
-#  "${libraw_SOURCE_DIR}/internal/defines.h"
-#  "${libraw_SOURCE_DIR}/internal/dmp_include.h"
-#  "${libraw_SOURCE_DIR}/internal/libraw_cameraids.h"
-#  "${libraw_SOURCE_DIR}/internal/libraw_cxx_defs.h"
-#  "${libraw_SOURCE_DIR}/internal/var_defines.h"
-#  "${libraw_SOURCE_DIR}/internal/x3f_tools.h"
+  "${libraw_SOURCE_DIR}/internal/libraw_internal_funcs.h"
+  "${libraw_SOURCE_DIR}/internal/dcraw_defs.h"
+  "${libraw_SOURCE_DIR}/internal/dcraw_fileio_defs.h"
+  "${libraw_SOURCE_DIR}/internal/defines.h"
+  "${libraw_SOURCE_DIR}/internal/dmp_include.h"
+  "${libraw_SOURCE_DIR}/internal/libraw_cameraids.h"
+  "${libraw_SOURCE_DIR}/internal/libraw_cxx_defs.h"
+  "${libraw_SOURCE_DIR}/internal/var_defines.h"
+  "${libraw_SOURCE_DIR}/internal/x3f_tools.h"
   "${libraw_SOURCE_DIR}/libraw/libraw.h"
   "${libraw_SOURCE_DIR}/libraw/libraw_alloc.h"
   "${libraw_SOURCE_DIR}/libraw/libraw_const.h"
@@ -116,10 +116,8 @@ add_library(
   "${libraw_SOURCE_DIR}/src/x3f/x3f_utils_patched.cpp"
   "${libraw_SOURCE_DIR}/src/write/apply_profile.cpp"
   "${libraw_SOURCE_DIR}/src/write/file_write.cpp"
-#  "${libraw_SOURCE_DIR}/src/write/write_ph.cpp"
   "${libraw_SOURCE_DIR}/src/write/tiff_writer.cpp"
   "${libraw_SOURCE_DIR}/src/preprocessing/ext_preprocess.cpp"
-#  "${libraw_SOURCE_DIR}/src/preprocessing/preprocessing_ph.cpp"
   "${libraw_SOURCE_DIR}/src/preprocessing/raw2image.cpp"
   "${libraw_SOURCE_DIR}/src/preprocessing/subtract_black.cpp"
   "${libraw_SOURCE_DIR}/src/demosaic/aahd_demosaic.cpp"
@@ -140,7 +138,6 @@ add_library(
   "${libraw_SOURCE_DIR}/src/utils/thumb_utils.cpp"
   "${libraw_SOURCE_DIR}/src/utils/utils_libraw.cpp"
   "${libraw_SOURCE_DIR}/src/postprocessing/dcraw_process.cpp"
-#  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_ph.cpp"
   "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_utils.cpp"
   "${libraw_SOURCE_DIR}/src/postprocessing/mem_image.cpp"
   "${libraw_SOURCE_DIR}/src/postprocessing/aspect_ratio.cpp"
@@ -178,62 +175,62 @@ add_sapi_library(
   sapi_libraw
 
   FUNCTIONS
-    libraw_strprogress
+#    libraw_strprogress
     libraw_init
     libraw_open_file
-    libraw_open_file_ex
-    libraw_open_wfile
-    libraw_open_wfile_ex
-    libraw_open_buffer
+#    libraw_open_file_ex
+#    libraw_open_wfile
+#    libraw_open_wfile_ex
+#    libraw_open_buffer
     libraw_unpack
-    libraw_unpack_thumb
-    libraw_recycle_datastream
-    libraw_recycle
+#    libraw_unpack_thumb
+#    libraw_recycle_datastream
+#    libraw_recycle
     libraw_close
-    libraw_subtract_black
-    libraw_raw2image
-    libraw_free_image
+#    libraw_subtract_black
+#    libraw_raw2image
+#    libraw_free_image
     libraw_version
     libraw_versionNumber
-    libraw_cameraList
-    libraw_cameraCount
-    libraw_set_memerror_handler
-    libraw_set_exifparser_handler
-    libraw_set_dataerror_handler
-    libraw_set_progress_handler
-    libraw_unpack_function_name
-    libraw_get_decoder_info
-    libraw_COLOR
-    libraw_capabilities
-    libraw_adjust_sizes_info_only
-    libraw_dcraw_ppm_tiff_writer
-    libraw_dcraw_thumb_writer
-    libraw_dcraw_process
-    libraw_processed_image_t
-    libraw_dcraw_make_mem_image
-    libraw_dcraw_make_mem_thumb
-    libraw_dcraw_clear_mem
-    libraw_set_demosaic
-    libraw_set_output_color
-    libraw_set_user_mul
-    libraw_set_output_bps
-    libraw_set_gamma
-    libraw_set_no_auto_bright
-    libraw_set_bright
-    libraw_set_highlight
-    libraw_set_fbdd_noiserd
-    libraw_get_raw_height
-    libraw_get_raw_width
-    libraw_get_iheight
-    libraw_get_iwidth
-    libraw_get_cam_mul
-    libraw_get_pre_mul
-    libraw_get_rgb_cam
-    libraw_get_color_maximum
-    libraw_set_output_tif
-    libraw_get_iparams
-    libraw_get_lensinfo
-    libraw_get_imgother
+#    libraw_cameraList
+#    libraw_cameraCount
+#    libraw_set_memerror_handler
+#    libraw_set_exifparser_handler
+#    libraw_set_dataerror_handler
+#    libraw_set_progress_handler
+#    libraw_unpack_function_name
+#    libraw_get_decoder_info
+#    libraw_COLOR
+#    libraw_capabilities
+#    libraw_adjust_sizes_info_only
+#    libraw_dcraw_ppm_tiff_writer
+#    libraw_dcraw_thumb_writer
+#    libraw_dcraw_process
+#    libraw_processed_image_t
+#    libraw_dcraw_make_mem_image
+#    libraw_dcraw_make_mem_thumb
+#    libraw_dcraw_clear_mem
+#    libraw_set_demosaic
+#    libraw_set_output_color
+#    libraw_set_user_mul
+#    libraw_set_output_bps
+#    libraw_set_gamma
+#    libraw_set_no_auto_bright
+#    libraw_set_bright
+#    libraw_set_highlight
+#    libraw_set_fbdd_noiserd
+#    libraw_get_raw_height
+#    libraw_get_raw_width
+#    libraw_get_iheight
+#    libraw_get_iwidth
+#    libraw_get_cam_mul
+#    libraw_get_pre_mul
+#    libraw_get_rgb_cam
+#    libraw_get_color_maximum
+#    libraw_set_output_tif
+#    libraw_get_iparams
+#    libraw_get_lensinfo
+#    libraw_get_imgother
 
   INPUTS
     "${libraw_SOURCE_DIR}/libraw/libraw.h"
