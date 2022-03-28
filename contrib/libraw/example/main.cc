@@ -36,6 +36,12 @@ it under the terms of the one of two licenses as you choose:
 #include <string.h>
 #include <math.h>
 #include <iostream>
+#include <fcntl.h>
+#ifndef WIN32
+#include <netinet/in.h>
+#else
+#include <winsock2.h>
+#endif
 
 #include "contrib/libraw/sandboxed.h"
 
@@ -63,25 +69,116 @@ unsigned subtract_bl(unsigned int val, int bl)
 //  void adjust_blacklevel() { LibRaw::adjust_bl(); }
 //};
 
+
+class LibRaw {
+ public:
+  LibRaw(LibRawSapiSandbox* sandbox, const std::string& file_name)
+      : sandbox_(CHECK_NOTNULL(sandbox)),
+        api_(sandbox_),
+        file_name_(file_name) {
+    init_status_ = InitLibRaw();
+  }
+
+  absl::Status InitLibRaw() {
+
+    SAPI_ASSIGN_OR_RETURN(libraw_data_t * lrd, api_.libraw_init(0));
+
+    sapi_libraw_data_t_.SetRemote(lrd);
+    SAPI_RETURN_IF_ERROR(sandbox_->TransferFromSandboxee(&sapi_libraw_data_t_));
+
+    return absl::OkStatus();
+  }
+
+  absl::Status OpenFile() {
+    SAPI_RETURN_IF_ERROR(CheckIsInit());
+
+    sapi::v::CStr file_name(file_name_.c_str());
+
+    sapi::v::Fd fd_(open(file_name_.c_str(), O_RDONLY));
+    SAPI_RETURN_IF_ERROR(sandbox_->TransferToSandboxee(&fd_));
+
+    sapi::v::CStr mode("r");
+    SAPI_ASSIGN_OR_RETURN(void* file,
+                          api_.sapi_fdopen(fd_.GetRemoteFd(), mode.PtrBefore()));
+    sapi::v::RemotePtr remote_file(file);
+
+    SAPI_ASSIGN_OR_RETURN(
+        int error_code,
+        api_.libraw_open_file(sapi_libraw_data_t_.PtrAfter(), &remote_file,
+                              file_name.PtrBefore()));
+
+    if (error_code != 0) {
+      return absl::UnavailableError(absl::string_view(std::to_string(error_code)));
+    }
+
+    return absl::OkStatus();
+  }
+
+  absl::Status Unpack() {
+    SAPI_RETURN_IF_ERROR(CheckIsInit());
+
+    sapi::v::CStr file_name(file_name_.c_str());
+
+    SAPI_ASSIGN_OR_RETURN(
+        int error_code,
+        api_.libraw_unpack(sapi_libraw_data_t_.PtrAfter()));
+    if (error_code != 0) {
+      return absl::UnavailableError(absl::string_view("error"));
+    }
+
+    return absl::OkStatus();
+  }
+
+  absl::Status _COLOR(int row, int col) {
+    SAPI_RETURN_IF_ERROR(CheckIsInit());
+
+    SAPI_ASSIGN_OR_RETURN(
+        color,
+        api_.libraw_COLOR(sapi_libraw_data_t_.PtrBefore(), row, col));
+
+    return absl::OkStatus();
+  }
+
+  int COLOR(int row, int col) {
+    absl::Status status = _COLOR(row, col);
+    return color;
+  }
+
+  absl::Status CheckIsInit() {
+    return init_status_;
+  }
+
+  LibRawSapiSandbox* sandbox_;
+  LibRawApi api_;
+  absl::Status init_status_;
+
+  std::string file_name_;
+
+  sapi::v::Struct<libraw_data_t> sapi_libraw_data_t_;
+
+  int color;
+};
+
 int main(int ac, char *av[])
 {
-  google::InitGoogleLogging(av[0]);
+//  google::InitGoogleLogging(av[0]);
 
-  if (ac < 4)
-  {
+  if (ac < 4) {
     usage(av[0]);
     exit(1);
   }
   int colstart = atoi(av[2]);
   int rowstart = atoi(av[3]);
   int channel = 0;
-  if (ac > 4) channel = atoi(av[4]);
+  if (ac > 4)
+    channel = atoi(av[4]);
   int width = 16;
-  if (ac > 5) width = atoi(av[5]);
+  if (ac > 5)
+    width = atoi(av[5]);
   int height = 4;
-  if (ac > 6) height = atoi(av[6]);
-  if (width <1 || height<1)
-  {
+  if (ac > 6)
+    height = atoi(av[6]);
+  if (width <1 || height<1) {
     usage(av[0]);
     exit(1);
   }
@@ -92,16 +189,16 @@ int main(int ac, char *av[])
     std::cerr << "Unable to start sandbox\n";
     return EXIT_FAILURE;
   }
-  LibRawApi api(&sandbox);
+  LibRaw lr(&sandbox, av[1]);
 
-  absl::StatusOr<libraw_data_t*> lr = api.libraw_init(0);
-  if (!lr.ok()) {
-    std::cerr << "Unable to init LibRaw\n";
-    return EXIT_FAILURE;
-  }
+//  absl::StatusOr<libraw_data_t*> lr = api.libraw_init(0);
+//  if (!lr.ok()) {
+//    std::cerr << "Unable to init LibRaw\n";
+//    return EXIT_FAILURE;
+//  }
 //  libraw_data_t* lr = status_or_lr.value();
 //  LibRaw_bl lr;
-  sapi::v::RemotePtr plr(*lr);
+//  sapi::v::RemotePtr plr(*lr);
 //  sapi::v::Struct<libraw_data_t> var(&lr);
 
 //  absl::StatusOr<char *> response = api.libraw_version();
@@ -117,89 +214,90 @@ int main(int ac, char *av[])
 //  } else {
 //    std::cout << ":(";
 //  }
-  {
-    absl::StatusOr<int> response =
-        api.libraw_open_file(&plr, file_name.PtrBefore());
-    //  absl::StatusOr<int> response = api.libraw_versionNumber();
+   absl::Status status;
 
-    if (!response.ok()) {
-      fprintf(stderr, "SAPI Unable to open file %s\n", av[1]);
-      exit(1);
-    }
-
-    if (*response != 0) {
-      fprintf(stderr, "LibRaw Unable to open file %s\n", av[1]);
-      exit(1);
-    }
-  }
+   status = lr.OpenFile();
+   if (!status.ok()) {
+     fprintf(stderr, "Unable to open file %s\n", av[1]);
+     std::cerr << status << "\n";
+     return EXIT_FAILURE;
+   }
+//  {
+//    absl::StatusOr<int> response =
+//        api.libraw_open_file(&plr, file_name.PtrBefore());
+//    //  absl::StatusOr<int> response = api.libraw_versionNumber();
+//
+//    if (!response.ok()) {
+//      fprintf(stderr, "SAPI Unable to open file %s\n", av[1]);
+//      exit(1);
+//    }
+//
+//    if (*response != 0) {
+//      fprintf(stderr, "LibRaw Unable to open file %s\n", av[1]);
+//      exit(1);
+//    }
+//  }
 
 //  sapi::v::Struct<libraw_data_t> lr_struct;
-  sapi::v::UInt value(0);
 
-  SAPI_ASSIGN_OR_RETURN(absl::StatusOr<libraw_data_t *>, api.libraw_init(0));
-
-//  if (((plr)->idata.colors == 1 && channel>0) || (channel >3))
-//  {
-//    fprintf(stderr, "Incorrect CHANNEL specified: %d\n", channel);
-//    exit(1);
-//  }
+  if ((lr.sapi_libraw_data_t_.data().idata.colors == 1 && channel>0) || (channel >3))
   {
-    absl::StatusOr<int> response = api.libraw_unpack(&plr);
-    if (!response.ok() or *response != 0) {
-      fprintf(stderr, "Unable to unpack raw data from %s\n", av[1]);
-      exit(1);
-    }
+    fprintf(stderr, "Incorrect CHANNEL specified: %d\n", channel);
+    exit(1);
   }
+  lr.Unpack();
+//  {
+//    absl::StatusOr<int> response = api.libraw_unpack(&plr);
+//    if (!response.ok() or *response != 0) {
+//      fprintf(stderr, "Unable to unpack raw data from %s\n", av[1]);
+//      exit(1);
+//    }
+//  }
 //  lr.adjust_blacklevel();
   printf("%s\t%d-%d-%dx%d\tchannel: %d\n", av[1], colstart, rowstart, width, height, channel);
 
-//  printf("%6s", "R\\C");
-//  for (int col = colstart; col < colstart + width && col < lr->sizes.raw_width; col++)
-//    printf("%6u", col);
-//  printf("\n");
+  printf("%6s", "R\\C");
+  for (int col = colstart; col < colstart + width && col < lr.sapi_libraw_data_t_.data().sizes.raw_width; col++)
+    printf("%6u", col);
+  printf("\n");
 
-//  if (lr.imgdata.rawdata.raw_image)
-//  {
-//    for (int row = rowstart; row < rowstart + height && row < lr.imgdata.sizes.raw_height; row++)
-//    {
-//      unsigned rcolors[48];
-//      if (lr.imgdata.idata.colors > 1)
-//        for (int c = 0; c < 48; c++)
-//          rcolors[c] = lr.COLOR(row, c);
-//      else
-//        memset(rcolors, 0, sizeof(rcolors));
-//      unsigned short *rowdata = &lr.imgdata.rawdata.raw_image[row * lr.imgdata.sizes.raw_pitch / 2];
-//      printf("%6u", row);
-//      for (int col = colstart; col < colstart + width && col < lr.imgdata.sizes.raw_width; col++)
-//        if (rcolors[col % 48] == (unsigned)channel) printf("%6u", subtract_bl(rowdata[col],lr.imgdata.color.cblack[channel]));
-//        else printf("     -");
-//      printf("\n");
-//    }
-//  }
-//  else if (lr.imgdata.rawdata.color4_image && channel < 4)
-//  {
-//    for (int row = rowstart; row < rowstart + height && row < lr.imgdata.sizes.raw_height; row++)
-//    {
-//      unsigned short(*rowdata)[4] = &lr.imgdata.rawdata.color4_image[row * lr.imgdata.sizes.raw_pitch / 8];
-//      printf("%6u", row);
-//      for (int col = colstart; col < colstart + width && col < lr.imgdata.sizes.raw_width; col++)
-//        printf("%6u", subtract_bl(rowdata[col][channel],lr.imgdata.color.cblack[channel]));
-//      printf("\n");
-//    }
-//  }
-//  else if (lr.imgdata.rawdata.color3_image && channel < 3)
-//  {
-//    for (int row = rowstart; row < rowstart + height && row < lr.imgdata.sizes.raw_height; row++)
-//    {
-//      unsigned short(*rowdata)[3] = &lr.imgdata.rawdata.color3_image[row * lr.imgdata.sizes.raw_pitch / 6];
-//      printf("%6u", row);
-//      for (int col = colstart; col < colstart + width && col < lr.imgdata.sizes.raw_width; col++)
-//        printf("%6u", subtract_bl(rowdata[col][channel],lr.imgdata.color.cblack[channel]));
-//      printf("\n");
-//    }
-//  }
-//  else
-//    printf("Unsupported file data (e.g. floating point format), or incorrect channel specified\n");
-  api.libraw_close(&plr).IgnoreError();
+  if (lr.sapi_libraw_data_t_.data().rawdata.raw_image) {
+    for (int row = rowstart; row < rowstart + height && row < lr.sapi_libraw_data_t_.data().sizes.raw_height; row++)
+    {
+      unsigned rcolors[48];
+      if (lr.sapi_libraw_data_t_.data().idata.colors > 1)
+        for (int c = 0; c < 48; c++)
+          rcolors[c] = lr.COLOR(row, c);
+      else
+        memset(rcolors, 0, sizeof(rcolors));
+      unsigned short *rowdata = &lr.sapi_libraw_data_t_.data().rawdata.raw_image[row * lr.sapi_libraw_data_t_.data().sizes.raw_pitch / 2];
+      printf("%6u", row);
+      for (int col = colstart; col < colstart + width && col < lr.sapi_libraw_data_t_.data().sizes.raw_width; col++)
+        if (rcolors[col % 48] == (unsigned)channel) printf("%6u", subtract_bl(rowdata[col],lr.sapi_libraw_data_t_.data().color.cblack[channel]));
+        else printf("     -");
+      printf("\n");
+    }
+  }
+  else if (lr.sapi_libraw_data_t_.data().rawdata.color4_image && channel < 4) {
+    for (int row = rowstart; row < rowstart + height && row < lr.sapi_libraw_data_t_.data().sizes.raw_height; row++) {
+      unsigned short(*rowdata)[4] = &lr.sapi_libraw_data_t_.data().rawdata.color4_image[row * lr.sapi_libraw_data_t_.data().sizes.raw_pitch / 8];
+      printf("%6u", row);
+      for (int col = colstart; col < colstart + width && col < lr.sapi_libraw_data_t_.data().sizes.raw_width; col++)
+        printf("%6u", subtract_bl(rowdata[col][channel],lr.sapi_libraw_data_t_.data().color.cblack[channel]));
+      printf("\n");
+    }
+  }
+  else if (lr.sapi_libraw_data_t_.data().rawdata.color3_image && channel < 3) {
+    for (int row = rowstart; row < rowstart + height && row < lr.sapi_libraw_data_t_.data().sizes.raw_height; row++) {
+      unsigned short(*rowdata)[3] = &lr.sapi_libraw_data_t_.data().rawdata.color3_image[row * lr.sapi_libraw_data_t_.data().sizes.raw_pitch / 6];
+      printf("%6u", row);
+      for (int col = colstart; col < colstart + width && col < lr.sapi_libraw_data_t_.data().sizes.raw_width; col++)
+        printf("%6u", subtract_bl(rowdata[col][channel],lr.sapi_libraw_data_t_.data().color.cblack[channel]));
+      printf("\n");
+    }
+  }
+  else
+    printf("Unsupported file data (e.g. floating point format), or incorrect channel specified\n");
+//  api.libraw_close(&plr).IgnoreError();
   return EXIT_SUCCESS;
 }

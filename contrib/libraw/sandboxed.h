@@ -33,11 +33,16 @@ class LibRawSapiSandbox : public LibRawSandbox {
     return sandbox2::PolicyBuilder()
         .AllowStaticStartup()
         .AllowDynamicStartup()
+        .AllowTcMalloc()
+        .AllowSystemMalloc()
+        .AllowScudoMalloc()
         .AllowOpen()
         .AllowRead()
         .AllowWrite()
         .AllowSystemMalloc()
         .AllowExit()
+        .AllowSafeFcntl()
+        .AllowSyscalls({__NR_recvmsg})
         .AddFile(file_name_, /*is_ro=*/true)
         .AllowRestartableSequencesWithProcFiles(
             sandbox2::PolicyBuilder::kAllowSlowFences)  // hangs without it?

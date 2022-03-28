@@ -176,6 +176,7 @@ add_sapi_library(
 
   FUNCTIONS
 #    libraw_strprogress
+    sapi_fdopen
     libraw_init
     libraw_open_file
 #    libraw_open_file_ex
@@ -231,6 +232,7 @@ add_sapi_library(
 #    libraw_get_iparams
 #    libraw_get_lensinfo
 #    libraw_get_imgother
+    libraw_COLOR
 
   INPUTS
     "${libraw_SOURCE_DIR}/libraw/libraw.h"
