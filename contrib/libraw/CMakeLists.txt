@@ -48,6 +48,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libraw_cmake)
 
+configure_file(raw.gen.h.in raw.gen.h)
+
 add_sapi_library(
   sapi_libraw
 
@@ -111,7 +113,7 @@ add_sapi_library(
     libraw_COLOR
 
   INPUTS
-    "${libraw_SOURCE_DIR}/libraw/libraw.h"
+    "${CMAKE_BINARY_DIR}/raw.gen.h"
 
   LIBRARY raw
   LIBRARY_NAME LibRaw
