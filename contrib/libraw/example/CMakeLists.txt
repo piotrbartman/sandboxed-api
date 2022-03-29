@@ -16,6 +16,7 @@ add_executable(
   sapi_minilibraw
 
   main.cc
+  ../utils/utils_libraw.cc
 )
 
 target_link_libraries(
