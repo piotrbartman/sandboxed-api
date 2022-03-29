@@ -52,23 +52,23 @@ class LibRaw {
 
   absl::Status CheckIsInit();
 
+  libraw_data_t GetImgData();
+  absl::StatusOr<std::vector<uint16_t>> RawData();
+
   absl::Status OpenFile();
   absl::Status Unpack();
   absl::StatusOr<int> COLOR(int row, int col);
-  absl::StatusOr<std::vector<uint16_t>> RawData();
 
+ private:
   absl::Status InitLibRaw();
-//  absl::Status COLOR_(int row, int col);
 
   LibRawSapiSandbox * sandbox_;
-  int size_;
-  bool is_open_;
   LibRawApi api_;
   absl::Status init_status_;
 
   std::string file_name_;
 
-  sapi::v::Struct<libraw_data_t> sapi_libraw_data_t_;
+ public: sapi::v::Struct<libraw_data_t> sapi_libraw_data_t_;
 };
 
 #endif  // CONTRIB_LIBRAW_UTILS_UTILS_LIBRAW_H_

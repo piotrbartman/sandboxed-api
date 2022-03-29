@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <fcntl.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
-#include <iostream>
 #ifndef WIN32
 #include <netinet/in.h>
 #else
@@ -47,7 +45,8 @@ unsigned subtract_bl(unsigned int val, int bl) {
 int main(int ac, char* av[]) {
   google::InitGoogleLogging(av[0]);
 
-  if (ac < 4) {
+  if (ac < 4)
+  {
     usage(av[0]);
     exit(1);
   }
@@ -59,7 +58,8 @@ int main(int ac, char* av[]) {
   if (ac > 5) width = atoi(av[5]);
   int height = 4;
   if (ac > 6) height = atoi(av[6]);
-  if (width < 1 || height < 1) {
+  if (width < 1 || height < 1)
+  {
     usage(av[0]);
     exit(1);
   }
@@ -67,59 +67,77 @@ int main(int ac, char* av[]) {
   sapi::v::ConstCStr file_name(av[1]);
 
   LibRawSapiSandbox sandbox(file_name.GetData());
-  if (!sandbox.Init().ok()) {
+  if (!sandbox.Init().ok())
+  {
     std::cerr << "Unable to start sandbox\n";
     return EXIT_FAILURE;
   }
-  LibRaw lr(&sandbox, av[1]);
 
   absl::Status status;
 
-  status = lr.OpenFile();
-  if (!status.ok()) {
-    fprintf(stderr, "Unable to open file %s\n", av[1]);
-    std::cerr << status << "\n";
+  LibRaw lr(&sandbox, av[1]);
+  if (not lr.CheckIsInit().ok())
+  {
+    fprintf(stderr, "Unable init LibRaw");
     return EXIT_FAILURE;
   }
 
-  if ((lr.sapi_libraw_data_t_.data().idata.colors == 1 && channel > 0) ||
-      (channel > 3)) {
-    fprintf(stderr, "Incorrect CHANNEL specified: %d\n", channel);
-    exit(1);
+  status = lr.OpenFile();
+  if (not status.ok())
+  {
+    fprintf(stderr, "Unable to open file %s\n", av[1]);
+    return EXIT_FAILURE;
   }
-  lr.Unpack();
 
-  printf("%s\t%d-%d-%dx%d\tchannel: %d\n", av[1], colstart, rowstart, width,
-         height, channel);
+  if ((lr.GetImgData().idata.colors == 1 and channel > 0)
+      or
+      (channel > 3))
+  {
+    fprintf(stderr, "Incorrect CHANNEL specified: %d\n", channel);
+    return EXIT_FAILURE;
+  }
 
+  status = lr.Unpack();
+  if (not status.ok())
+  {
+    fprintf(stderr, "Unable to unpack file %s\n", av[1]);
+    return EXIT_FAILURE;
+  }
+
+  printf("%s\t%d-%d-%dx%d\tchannel: %d\n",
+         av[1], colstart, rowstart, width, height, channel);
   printf("%6s", "R\\C");
-  for (int col = colstart; col < colstart + width &&
-                           col < lr.sapi_libraw_data_t_.data().sizes.raw_width;
+  for (int col = colstart;
+       col < colstart + width and
+       col < lr.GetImgData().sizes.raw_width;
        col++)
+  {
     printf("%6u", col);
+  }
   printf("\n");
 
-  absl::StatusOr<std::vector<uint16_t>> rawdata = lr.RawData();
-  if (not rawdata.ok()) {
-    std::cerr << "Unable to get raw data\n";
-    return EXIT_FAILURE;
-  }
+  if (lr.GetImgData().rawdata.raw_image)
+  {
+    absl::StatusOr<std::vector<uint16_t>> rawdata = lr.RawData();
+    if (not rawdata.ok())
+    {
+      fprintf(stderr, "Unable to get raw data\n");
+      return EXIT_FAILURE;
+    }
 
-  if (lr.sapi_libraw_data_t_.data().rawdata.raw_image) {
     for (int row = rowstart;
          row < rowstart + height &&
-         row < lr.sapi_libraw_data_t_.data().sizes.raw_height;
+         row < lr.GetImgData().sizes.raw_height;
          row++)
     {
       unsigned rcolors[48];
-      if (lr.sapi_libraw_data_t_.data().idata.colors > 1)
+      if (lr.GetImgData().idata.colors > 1)
       {
         absl::StatusOr<uint16_t> color;
         for (int c = 0; c < 48; c++)
         {
           color = lr.COLOR(row, c);
-          if (color.ok())
-            rcolors[c] = *color;
+          if (color.ok()) rcolors[c] = *color;
         }
       }
       else
@@ -127,24 +145,33 @@ int main(int ac, char* av[]) {
         memset(rcolors, 0, sizeof(rcolors));
       }
       printf("%6u", row);
+
       for (int col = colstart;
            col < colstart + width &&
-           col < lr.sapi_libraw_data_t_.data().sizes.raw_width;
-           col++)
-      {
-        int idx = row * lr.sapi_libraw_data_t_.data().sizes.raw_pitch / 2 + col;
+           col < lr.GetImgData().sizes.raw_width;
+           col++) {
+        int idx = row * lr.GetImgData().sizes.raw_pitch / 2 + col;
+
         if (rcolors[col % 48] == (unsigned)channel)
+        {
           printf("%6u",
                  subtract_bl((*rawdata)[idx],
-                 lr.sapi_libraw_data_t_.data().color.cblack[channel]));
+                 lr.GetImgData().color.cblack[channel]));
+        }
         else
+        {
           printf("     -");
+        }
       }
       printf("\n");
     }
-  } else
+  }
+  else
+  {
     printf(
         "Unsupported file data (e.g. floating point format), or incorrect "
         "channel specified\n");
+  }
+
   return EXIT_SUCCESS;
 }

@@ -33,6 +33,8 @@ LibRaw::~LibRaw() {
 
 absl::Status LibRaw::CheckIsInit() { return init_status_; }
 
+libraw_data_t LibRaw::GetImgData() { return sapi_libraw_data_t_.data(); }
+
 absl::Status LibRaw::OpenFile() {
   SAPI_RETURN_IF_ERROR(CheckIsInit());
 
@@ -46,9 +48,6 @@ absl::Status LibRaw::OpenFile() {
     return absl::UnavailableError(
         absl::string_view(std::to_string(error_code)));
   }
-
-  size_ = sapi_libraw_data_t_.data().sizes.raw_height *
-          sapi_libraw_data_t_.data().sizes.raw_width;
 
   return absl::OkStatus();
 }
@@ -68,15 +67,6 @@ absl::Status LibRaw::Unpack() {
   return absl::OkStatus();
 }
 
-//absl::Status LibRaw::COLOR_(int row, int col) {
-//  SAPI_RETURN_IF_ERROR(CheckIsInit());
-//
-//  SAPI_ASSIGN_OR_RETURN(
-//      color, api_.libraw_COLOR(sapi_libraw_data_t_.PtrBefore(), row, col));
-//
-//  return absl::OkStatus();
-//}
-
 absl::StatusOr<int> LibRaw::COLOR(int row, int col) {
   SAPI_RETURN_IF_ERROR(CheckIsInit());
 
@@ -86,14 +76,15 @@ absl::StatusOr<int> LibRaw::COLOR(int row, int col) {
       color, api_.libraw_COLOR(sapi_libraw_data_t_.PtrBefore(), row, col));
 
   return color;
-//  absl::Status status = COLOR_(row, col);
-//  return color;
 }
 
 absl::StatusOr<std::vector<uint16_t>> LibRaw::RawData() {
   SAPI_RETURN_IF_ERROR(CheckIsInit());
 
-  std::vector<uint16_t> buf(size_);
+  int size = sapi_libraw_data_t_.data().sizes.raw_height *
+             sapi_libraw_data_t_.data().sizes.raw_width;
+
+  std::vector<uint16_t> buf(size);
   sapi::v::Array<uint16_t> rawdata(buf.data(), buf.size());
 
   rawdata.SetRemote(sapi_libraw_data_t_.data().rawdata.raw_image);
