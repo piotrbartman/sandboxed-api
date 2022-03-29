@@ -35,141 +35,20 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/LibRaw/LibRaw.git
   GIT_TAG adcb898a00746c8aa886eb06cc9f5a1cb1834fca
 )
-
 FetchContent_GetProperties(libraw)
-if(NOT libraw_POPULATED)
-  FetchContent_Populate(libraw)
-  set(libraw_STATUS_FILE "${libraw_SOURCE_DIR}/config.status")
-  if(EXISTS "${libraw_STATUS_FILE}")
-    file(SHA256 "${libraw_STATUS_FILE}" _sapi_CONFIG_STATUS)
-  endif()
-  if(NOT _sapi_CONFIG_STATUS STREQUAL "${libraw_CONFIG_STATUS}")
-    message("-- Configuring libraw...")
-    execute_process(
-            COMMAND autoreconf -i
-            WORKING_DIRECTORY "${libraw_SOURCE_DIR}"
-            RESULT_VARIABLE _sapi_libraw_autoreconf_result
-    )
-    if(NOT _sapi_libraw_autoreconf_result EQUAL "0")
-      message(FATAL_ERROR "Configuration for libraw failed: "
-              "${_sapi_libraw_autoreconf_result}")
-    endif()
-    execute_process(
-            COMMAND ./configure --disable-dependency-tracking
-            --quiet
-            WORKING_DIRECTORY "${libraw_SOURCE_DIR}"
-            RESULT_VARIABLE _sapi_libraw_config_result
-    )
-    if(NOT _sapi_libraw_config_result EQUAL "0")
-      message(FATAL_ERROR "Configuration for libraw failed: "
-              "${_sapi_libraw_config_result}")
-    endif()
-    file(SHA256 "${libraw_SOURCE_DIR}/config.status" _sapi_CONFIG_STATUS)
-    set(libraw_CONFIG_STATUS "${_sapi_CONFIG_STATUS}" CACHE INTERNAL "")
-  endif()
-endif()
+FetchContent_Populate(libraw)
 
-add_library(
-  libraw STATIC
+set(LIBRAW_PATH "${libraw_SOURCE_DIR}" CACHE STRING "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  libraw_cmake
 
-  "${libraw_SOURCE_DIR}/internal/libraw_internal_funcs.h"
-  "${libraw_SOURCE_DIR}/internal/dcraw_defs.h"
-  "${libraw_SOURCE_DIR}/internal/dcraw_fileio_defs.h"
-  "${libraw_SOURCE_DIR}/internal/defines.h"
-  "${libraw_SOURCE_DIR}/internal/dmp_include.h"
-  "${libraw_SOURCE_DIR}/internal/libraw_cameraids.h"
-  "${libraw_SOURCE_DIR}/internal/libraw_cxx_defs.h"
-  "${libraw_SOURCE_DIR}/internal/var_defines.h"
-  "${libraw_SOURCE_DIR}/internal/x3f_tools.h"
-  "${libraw_SOURCE_DIR}/libraw/libraw.h"
-  "${libraw_SOURCE_DIR}/libraw/libraw_alloc.h"
-  "${libraw_SOURCE_DIR}/libraw/libraw_const.h"
-  "${libraw_SOURCE_DIR}/libraw/libraw_datastream.h"
-  "${libraw_SOURCE_DIR}/libraw/libraw_internal.h"
-  "${libraw_SOURCE_DIR}/libraw/libraw_types.h"
-  "${libraw_SOURCE_DIR}/libraw/libraw_version.h"
-  "${libraw_SOURCE_DIR}/src/metadata/pentax.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/samsung.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/makernotes.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/p1.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/kodak.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/misc_parsers.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/hasselblad_model.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/leica.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/identify_tools.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/fuji.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/epson.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/minolta.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/mediumformat.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/adobepano.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/canon.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/nikon.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/olympus.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/tiff.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/normalize_model.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/exif_gps.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/cr3_parser.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/ciff.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/identify.cpp"
-  "${libraw_SOURCE_DIR}/src/metadata/sony.cpp"
-  "${libraw_SOURCE_DIR}/src/x3f/x3f_parse_process.cpp"
-  "${libraw_SOURCE_DIR}/src/x3f/x3f_utils_patched.cpp"
-  "${libraw_SOURCE_DIR}/src/write/apply_profile.cpp"
-  "${libraw_SOURCE_DIR}/src/write/file_write.cpp"
-  "${libraw_SOURCE_DIR}/src/write/tiff_writer.cpp"
-  "${libraw_SOURCE_DIR}/src/preprocessing/ext_preprocess.cpp"
-  "${libraw_SOURCE_DIR}/src/preprocessing/raw2image.cpp"
-  "${libraw_SOURCE_DIR}/src/preprocessing/subtract_black.cpp"
-  "${libraw_SOURCE_DIR}/src/demosaic/aahd_demosaic.cpp"
-  "${libraw_SOURCE_DIR}/src/demosaic/xtrans_demosaic.cpp"
-  "${libraw_SOURCE_DIR}/src/demosaic/misc_demosaic.cpp"
-  "${libraw_SOURCE_DIR}/src/demosaic/dcb_demosaic.cpp"
-  "${libraw_SOURCE_DIR}/src/demosaic/ahd_demosaic.cpp"
-  "${libraw_SOURCE_DIR}/src/demosaic/dht_demosaic.cpp"
-  "${libraw_SOURCE_DIR}/src/integration/dngsdk_glue.cpp"
-  "${libraw_SOURCE_DIR}/src/integration/rawspeed_glue.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/curves.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/utils_dcraw.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/init_close_utils.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/read_utils.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/decoder_info.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/open.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/phaseone_processing.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/thumb_utils.cpp"
-  "${libraw_SOURCE_DIR}/src/utils/utils_libraw.cpp"
-  "${libraw_SOURCE_DIR}/src/postprocessing/dcraw_process.cpp"
-  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_utils.cpp"
-  "${libraw_SOURCE_DIR}/src/postprocessing/mem_image.cpp"
-  "${libraw_SOURCE_DIR}/src/postprocessing/aspect_ratio.cpp"
-  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_utils_dcrdefs.cpp"
-  "${libraw_SOURCE_DIR}/src/postprocessing/postprocessing_aux.cpp"
-  "${libraw_SOURCE_DIR}/src/tables/cameralist.cpp"
-  "${libraw_SOURCE_DIR}/src/tables/colordata.cpp"
-  "${libraw_SOURCE_DIR}/src/tables/colorconst.cpp"
-  "${libraw_SOURCE_DIR}/src/tables/wblists.cpp"
-  "${libraw_SOURCE_DIR}/src/libraw_c_api.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/smal.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/decoders_dcraw.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/generic.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/fuji_compressed.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/decoders_libraw.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/unpack_thumb.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/kodak_decoders.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/dng.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/canon_600.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/decoders_libraw_dcrdefs.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/crx.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/fp_dng.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/unpack.cpp"
-  "${libraw_SOURCE_DIR}/src/decoders/load_mfbacks.cpp"
-  "${libraw_SOURCE_DIR}/src/libraw_datastream.cpp"
+  GIT_REPOSITORY https://github.com/LibRaw/LibRaw-cmake.git
+  GIT_TAG b82a1b0101b1e7264eb3113f1e6c1ba2372ebb7f
 )
+FetchContent_MakeAvailable(libraw_cmake)
 
-target_include_directories(
-  libraw PUBLIC
-
-  "${libraw_SOURCE_DIR}"
-)
+configure_file(raw.gen.h.in raw.gen.h)
 
 add_sapi_library(
   sapi_libraw
@@ -234,9 +113,9 @@ add_sapi_library(
     libraw_COLOR
 
   INPUTS
-    "${libraw_SOURCE_DIR}/libraw/libraw.h"
+    "${CMAKE_BINARY_DIR}/raw.gen.h"
 
-  LIBRARY libraw
+  LIBRARY raw
   LIBRARY_NAME LibRaw
   NAMESPACE ""
 )
