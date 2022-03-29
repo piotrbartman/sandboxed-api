@@ -94,17 +94,9 @@ class LibRaw {
 
     sapi::v::CStr file_name(file_name_.c_str());
 
-    sapi::v::Fd fd_(open(file_name_.c_str(), O_RDONLY));
-    SAPI_RETURN_IF_ERROR(sandbox_->TransferToSandboxee(&fd_));
-
-    sapi::v::CStr mode("r");
-    SAPI_ASSIGN_OR_RETURN(void* file,
-                          api_.sapi_fdopen(fd_.GetRemoteFd(), mode.PtrBefore()));
-    sapi::v::RemotePtr remote_file(file);
-
     SAPI_ASSIGN_OR_RETURN(
         int error_code,
-        api_.libraw_open_file(sapi_libraw_data_t_.PtrAfter(), &remote_file,
+        api_.libraw_open_file(sapi_libraw_data_t_.PtrAfter(),
                               file_name.PtrBefore()));
 
     if (error_code != 0) {
@@ -262,6 +254,7 @@ int main(int ac, char *av[])
   printf("\n");
 
   if (lr.sapi_libraw_data_t_.data().rawdata.raw_image) {
+    std::cout << "A";
     for (int row = rowstart; row < rowstart + height && row < lr.sapi_libraw_data_t_.data().sizes.raw_height; row++)
     {
       unsigned rcolors[48];
@@ -279,6 +272,7 @@ int main(int ac, char *av[])
     }
   }
   else if (lr.sapi_libraw_data_t_.data().rawdata.color4_image && channel < 4) {
+    std::cout << "B";
     for (int row = rowstart; row < rowstart + height && row < lr.sapi_libraw_data_t_.data().sizes.raw_height; row++) {
       unsigned short(*rowdata)[4] = &lr.sapi_libraw_data_t_.data().rawdata.color4_image[row * lr.sapi_libraw_data_t_.data().sizes.raw_pitch / 8];
       printf("%6u", row);
@@ -288,6 +282,7 @@ int main(int ac, char *av[])
     }
   }
   else if (lr.sapi_libraw_data_t_.data().rawdata.color3_image && channel < 3) {
+    std::cout << "C";
     for (int row = rowstart; row < rowstart + height && row < lr.sapi_libraw_data_t_.data().sizes.raw_height; row++) {
       unsigned short(*rowdata)[3] = &lr.sapi_libraw_data_t_.data().rawdata.color3_image[row * lr.sapi_libraw_data_t_.data().sizes.raw_pitch / 6];
       printf("%6u", row);
