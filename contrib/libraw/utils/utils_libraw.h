@@ -51,12 +51,15 @@ class LibRaw {
   ~LibRaw();
 
   absl::Status CheckIsInit();
+  bool IsInit();
 
   libraw_data_t GetImgData();
   absl::StatusOr<std::vector<uint16_t>> RawData();
 
   absl::Status OpenFile();
   absl::Status Unpack();
+  absl::Status SubtractBlack();
+  absl::StatusOr<std::vector<char *>> GetCameraList();
   absl::StatusOr<int> COLOR(int row, int col);
 
  private:

@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <fcntl.h>
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
-
-#ifndef WIN32
-#include <netinet/in.h>
-#else
-#include <winsock2.h>
-#endif
 
 #include "contrib/libraw/sandboxed.h"
 #include "contrib/libraw/utils/utils_libraw.h"
@@ -38,8 +30,8 @@ void usage(const char* av) {
       av);
 }
 
-unsigned subtract_bl(unsigned int val, int bl) {
-  return val > (unsigned)bl ? val - (unsigned)bl : 0;
+unsigned subtract_bl(int val, int bl) {
+  return val > bl ? val - bl : 0;
 }
 
 int main(int ac, char* av[]) {
@@ -104,6 +96,12 @@ int main(int ac, char* av[]) {
     return EXIT_FAILURE;
   }
 
+  status = lr.SubtractBlack();
+  if (not status.ok())
+  {
+    fprintf(stderr, "Unable to subtract black level");
+  }
+
   printf("%s\t%d-%d-%dx%d\tchannel: %d\n",
          av[1], colstart, rowstart, width, height, channel);
   printf("%6s", "R\\C");
@@ -133,7 +131,7 @@ int main(int ac, char* av[]) {
       unsigned rcolors[48];
       if (lr.GetImgData().idata.colors > 1)
       {
-        absl::StatusOr<uint16_t> color;
+        absl::StatusOr<int> color;
         for (int c = 0; c < 48; c++)
         {
           color = lr.COLOR(row, c);

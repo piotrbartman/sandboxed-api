@@ -54,62 +54,22 @@ add_sapi_library(
   sapi_libraw
 
   FUNCTIONS
-    libraw_strerror
-    libraw_strprogress
     libraw_init
     libraw_open_file
-    libraw_open_file_ex
-    libraw_open_wfile
-    libraw_open_wfile_ex
-    libraw_open_buffer
-
     libraw_unpack
-    libraw_unpack_thumb
-    libraw_recycle_datastream
-    libraw_recycle
     libraw_close
-    libraw_subtract_black
-    libraw_raw2image
-    libraw_free_image
-    libraw_version
-    libraw_versionNumber
+
+    libraw_subtract_black #
+#    libraw_raw2image
+#    libraw_free_image
+
     libraw_cameraList
     libraw_cameraCount
 
-    libraw_unpack_function_name
-    libraw_get_decoder_info
-    libraw_COLOR
-    libraw_capabilities
-    libraw_adjust_sizes_info_only
-    libraw_dcraw_ppm_tiff_writer
-    libraw_dcraw_thumb_writer
-    libraw_dcraw_process
-    libraw_processed_image_t
-    libraw_dcraw_make_mem_image
-    libraw_dcraw_make_mem_thumb
-    libraw_dcraw_clear_mem
-    libraw_set_demosaic
-    libraw_set_output_color
-    libraw_set_adjust_maximum_thr
-    libraw_set_user_mul
-    libraw_set_output_bps
-    libraw_set_gamma
-    libraw_set_no_auto_bright
-    libraw_set_bright
-    libraw_set_highlight
-    libraw_set_fbdd_noiserd
-    libraw_get_raw_height
-    libraw_get_raw_width
-    libraw_get_iheight
-    libraw_get_iwidth
-    libraw_get_cam_mul
-    libraw_get_pre_mul
-    libraw_get_rgb_cam
-    libraw_get_color_maximum
-    libraw_set_output_tif
-    libraw_get_iparams
-    libraw_get_lensinfo
-    libraw_get_imgother
+    libraw_COLOR #
+#    libraw_dcraw_process
+#    libraw_dcraw_ppm_tiff_writer
+
 
   INPUTS
     "${CMAKE_BINARY_DIR}/raw.gen.h"
@@ -129,6 +89,6 @@ if(SAPI_ENABLE_EXAMPLES)
     add_subdirectory(example)
 endif()
 
-#if(SAPI_ENABLE_TESTS)
-#    add_subdirectory(test)
-#endif()
+if(SAPI_ENABLE_TESTS)
+    add_subdirectory(test)
+endif()

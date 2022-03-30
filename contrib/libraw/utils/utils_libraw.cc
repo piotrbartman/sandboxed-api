@@ -33,6 +33,8 @@ LibRaw::~LibRaw() {
 
 absl::Status LibRaw::CheckIsInit() { return init_status_; }
 
+bool LibRaw::IsInit() { return CheckIsInit().ok(); }
+
 libraw_data_t LibRaw::GetImgData() { return sapi_libraw_data_t_.data(); }
 
 absl::Status LibRaw::OpenFile() {
@@ -55,10 +57,8 @@ absl::Status LibRaw::OpenFile() {
 absl::Status LibRaw::Unpack() {
   SAPI_RETURN_IF_ERROR(CheckIsInit());
 
-  sapi::v::CStr file_name(file_name_.c_str());
-
   SAPI_ASSIGN_OR_RETURN(int error_code,
-                        api_.libraw_unpack(sapi_libraw_data_t_.PtrBoth()));
+                        api_.libraw_unpack(sapi_libraw_data_t_.PtrAfter()));
   if (error_code != LIBRAW_SUCCESS) {
     return absl::UnavailableError(
         absl::string_view(std::to_string(error_code)));
@@ -67,13 +67,37 @@ absl::Status LibRaw::Unpack() {
   return absl::OkStatus();
 }
 
+absl::Status LibRaw::SubtractBlack() {
+  SAPI_RETURN_IF_ERROR(CheckIsInit());
+
+  return api_.libraw_subtract_black(sapi_libraw_data_t_.PtrAfter());
+}
+
+absl::StatusOr<std::vector<char *>> LibRaw::GetCameraList() {
+  SAPI_RETURN_IF_ERROR(CheckIsInit());
+
+  int size;
+  SAPI_ASSIGN_OR_RETURN(size, api_.libraw_cameraCount());
+
+  std::vector<char *> buf(size);
+  sapi::v::Array<char *> camera_list(buf.data(), buf.size());
+
+  char ** sapi_camera_list;
+  SAPI_ASSIGN_OR_RETURN(sapi_camera_list, api_.libraw_cameraList());
+
+  camera_list.SetRemote(sapi_camera_list);
+  SAPI_RETURN_IF_ERROR(api_.GetSandbox()->TransferFromSandboxee(&camera_list));
+
+  return buf;
+}
+
 absl::StatusOr<int> LibRaw::COLOR(int row, int col) {
   SAPI_RETURN_IF_ERROR(CheckIsInit());
 
   int color;
 
   SAPI_ASSIGN_OR_RETURN(
-      color, api_.libraw_COLOR(sapi_libraw_data_t_.PtrBefore(), row, col));
+      color, api_.libraw_COLOR(sapi_libraw_data_t_.PtrNone(), row, col));
 
   return color;
 }
