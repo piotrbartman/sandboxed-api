@@ -17,12 +17,11 @@
 #include <fstream>
 
 #include "contrib/uriparser/sandboxed.h"
-#include "contrib/uriparser/utils/utils_uriparser.h"
 #include "sandboxed_api/util/path.h"
 #include "sandboxed_api/util/status_matchers.h"
 #include "sandboxed_api/util/temp_file.h"
 
-#include "absl/cleanup/cleanup.h" // TODO: remove
+#include "absl/cleanup/cleanup.h"
 
 namespace {
 
@@ -321,6 +320,9 @@ const struct TestVariant {
 class UriParserBase : public testing::Test {
  protected:
   void SetUp() override;
+  void ParseUri(sapi::v::ConstCStr&, sapi::v::Struct<UriParserStateA>&,
+                sapi::v::Struct<UriUriA>*);
+  void GetUriString(std::string&, sapi::v::Struct<UriUriA>*);
   std::unique_ptr<UriparserSapiSandbox> sandbox_;
   std::unique_ptr<UriparserApi> api_;
 };
@@ -334,65 +336,63 @@ void UriParserBase::SetUp() {
   api_ = std::make_unique<UriparserApi>(sandbox_.get());
 }
 
-TEST_P(UriParserTestData, TestUri) {
-  const TestVariant& tv = GetParam();
-
-  sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
-  sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
+void UriParserBase::ParseUri(
+    sapi::v::ConstCStr& c_uri,
+    sapi::v::Struct<UriParserStateA>& state,
+    sapi::v::Struct<UriUriA>* uri_) {
+  SAPI_ASSERT_OK(sandbox_->Allocate(uri_, true));
+  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri_->GetRemote());
   SAPI_ASSERT_OK_AND_ASSIGN(
       int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
   ASSERT_EQ(ret, 0);
+  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(uri_));
+}
 
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
-
+void UriParserBase::GetUriString(
+    std::string& actual, sapi::v::Struct<UriUriA>* uri_) {
   sapi::v::Int size;
   SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringCharsRequiredA(uri.PtrNone(), size.PtrAfter()));
+      int ret,
+      api_->uriToStringCharsRequiredA(uri_->PtrNone(), size.PtrAfter()));
   ASSERT_EQ(ret, 0);
 
   sapi::v::Array<char> buf(size.GetValue() + 1);
 
   SAPI_ASSERT_OK_AND_ASSIGN(
       ret, api_->uriToStringA(
-               buf.PtrAfter(), uri.PtrNone(), buf.GetSize(), nullptr));
+               buf.PtrAfter(), uri_->PtrNone(), buf.GetSize(), nullptr));
   ASSERT_EQ(ret, 0);
 
-  std::string actual(buf.GetData());
+  actual = std::string(buf.GetData());
+}
+
+TEST_P(UriParserTestData, TestUri) {
+  const TestVariant& tv = GetParam();
+  sapi::v::ConstCStr c_uri(tv.test.c_str());
+  sapi::v::Struct<UriParserStateA> state;
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
+
+  std::string actual;
+  GetUriString(actual, &uri);
   ASSERT_EQ(actual, tv.uri);
 }
 
 TEST_P(UriParserTestData, TestUriEscaped) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
-
-  sapi::v::Int size;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringCharsRequiredA(uri.PtrNone(), size.PtrAfter()));
-  ASSERT_EQ(ret, 0);
-
-  sapi::v::Array<char> buf(size.GetValue() + 1);
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringA(
-               buf.PtrAfter(), uri.PtrNone(), buf.GetSize(), nullptr));
-  ASSERT_EQ(ret, 0);
-
-  std::string uri_str(buf.GetData());
+  std::string uri_str;
+  GetUriString(uri_str, &uri);
 
   int space = uri_str.length() * 6 + 1;
 
@@ -408,18 +408,13 @@ TEST_P(UriParserTestData, TestUriEscaped) {
 
 TEST_P(UriParserTestData, TestScheme) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   UriTextRangeA part = uri.mutable_data()->scheme;
 
@@ -433,18 +428,13 @@ TEST_P(UriParserTestData, TestScheme) {
 
 TEST_P(UriParserTestData, TestUserInfo) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   UriTextRangeA* part = &uri.mutable_data()->userInfo;
   if (part != nullptr and part->first != nullptr) {
@@ -462,18 +452,13 @@ TEST_P(UriParserTestData, TestUserInfo) {
 
 TEST_P(UriParserTestData, TestHostText) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   UriTextRangeA* part = &uri.mutable_data()->hostText;
   if (part != nullptr and part->first != nullptr) {
@@ -490,51 +475,39 @@ TEST_P(UriParserTestData, TestHostText) {
 
 TEST_P(UriParserTestData, TestHostIP) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   char ipstr[INET6_ADDRSTRLEN] = "";
 
-  if (uri.mutable_data()->hostData.ip4) {  // TODO: seperate tests
+  if (uri.mutable_data()->hostData.ip4) {
     sapi::v::Struct<UriIp4> ip4;
     ip4.SetRemote(uri.mutable_data()->hostData.ip4);
     SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&ip4));
     inet_ntop(AF_INET, ip4.mutable_data()->data, ipstr, sizeof(ipstr));
-    ASSERT_EQ(1, 2);
   } else if (uri.mutable_data()->hostData.ip6) {
     sapi::v::Struct<UriIp6> ip6;
     ip6.SetRemote(uri.mutable_data()->hostData.ip6);
     SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&ip6));
     inet_ntop(AF_INET6, ip6.mutable_data()->data, ipstr, sizeof(ipstr));
-    ASSERT_EQ(1, 2);
   }
   ASSERT_EQ(ipstr, tv.hostip);
 }
 
 TEST_P(UriParserTestData, TestPortText) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   UriTextRangeA* part = &uri.mutable_data()->portText;
   if (part != nullptr and part->first != nullptr) {
@@ -551,18 +524,13 @@ TEST_P(UriParserTestData, TestPortText) {
 
 TEST_P(UriParserTestData, TestQuery) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   UriTextRangeA* part = &uri.mutable_data()->query;
   if (part != nullptr and part->first != nullptr) {
@@ -579,18 +547,13 @@ TEST_P(UriParserTestData, TestQuery) {
 
 TEST_P(UriParserTestData, TestFragment) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   UriTextRangeA* part = &uri.mutable_data()->fragment;
   if (part != nullptr and part->first != nullptr) {
@@ -607,24 +570,18 @@ TEST_P(UriParserTestData, TestFragment) {
 
 TEST_P(UriParserTestData, TestNormalize) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
-
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   SAPI_ASSERT_OK_AND_ASSIGN(
       int norm_mask, api_->uriNormalizeSyntaxMaskRequiredA(uri.PtrNone()));
   SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask));
+      int ret, api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask));
   ASSERT_EQ(ret, 0);
 
   sapi::v::Int size;
@@ -646,18 +603,13 @@ TEST_P(UriParserTestData, TestNormalize) {
 
 TEST_P(UriParserTestData, TestMultiple) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   // get query
   UriTextRangeA* part = &uri.mutable_data()->query;
@@ -675,18 +627,16 @@ TEST_P(UriParserTestData, TestMultiple) {
   // get host IP
   char ipstr[INET6_ADDRSTRLEN] = "";
 
-  if (uri.mutable_data()->hostData.ip4) {  // TODO: seperate tests
+  if (uri.mutable_data()->hostData.ip4) {
     sapi::v::Struct<UriIp4> ip4;
     ip4.SetRemote(uri.mutable_data()->hostData.ip4);
     SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&ip4));
     inet_ntop(AF_INET, ip4.mutable_data()->data, ipstr, sizeof(ipstr));
-    ASSERT_EQ(1, 2);
   } else if (uri.mutable_data()->hostData.ip6) {
     sapi::v::Struct<UriIp6> ip6;
     ip6.SetRemote(uri.mutable_data()->hostData.ip6);
     SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&ip6));
     inet_ntop(AF_INET6, ip6.mutable_data()->data, ipstr, sizeof(ipstr));
-    ASSERT_EQ(1, 2);
   }
   ASSERT_EQ(ipstr, tv.hostip);
 
@@ -694,7 +644,7 @@ TEST_P(UriParserTestData, TestMultiple) {
   SAPI_ASSERT_OK_AND_ASSIGN(
         int norm_mask, api_->uriNormalizeSyntaxMaskRequiredA(uri.PtrNone()));
   SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask));
+      int ret, api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask));
   ASSERT_EQ(ret, 0);
 
   // GetUri
@@ -717,40 +667,32 @@ TEST_P(UriParserTestData, TestMultiple) {
 
 TEST_P(UriParserTestData, TestAddBaseExample) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   // add base
-  // new uri
   sapi::v::ConstCStr c_base_uri("http://www.example.com");
   sapi::v::Struct<UriUriA> base_uri;
   sapi::v::Struct<UriParserStateA> base_state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&base_uri, true));
-  base_state.mutable_data()->uri = reinterpret_cast<UriUriA*>(base_uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriParseUriA(base_state.PtrBefore(), c_base_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&base_uri));
-
+  ParseUri(c_base_uri, base_state, &base_uri);
+  absl::Cleanup base_uri_cleanup = [this, &base_uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(base_uri.PtrNone()));
+  };
 
   sapi::v::Struct<UriUriA> newuri;
   SAPI_ASSERT_OK_AND_ASSIGN(
-      ret,
+      int ret,
       api_->uriAddBaseUriA(
           newuri.PtrAfter(), uri.PtrNone(), base_uri.PtrBefore()));
   ASSERT_EQ(ret, 0);
+  absl::Cleanup newuri_cleanup = [this, &newuri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(newuri.PtrNone()));
+  };
 
   // GetUri
   sapi::v::Int size;
@@ -769,44 +711,37 @@ TEST_P(UriParserTestData, TestAddBaseExample) {
   std::string actual(buf.GetData());
   ASSERT_EQ(actual, tv.add_base_example);
 
-  SAPI_ASSERT_OK(api_->uriFreeUriMembersA(newuri.PtrNone()));  // TODO
+//  SAPI_ASSERT_OK(api_->uriFreeUriMembersA(newuri.PtrNone()));  // TODO
 }
 
 TEST_P(UriParserTestData, TestRemoveBaseExample) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   // remove base
-  // new uri
   sapi::v::ConstCStr c_base_uri("http://www.example.com");
   sapi::v::Struct<UriUriA> base_uri;
   sapi::v::Struct<UriParserStateA> base_state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&base_uri, true));
-  base_state.mutable_data()->uri = reinterpret_cast<UriUriA*>(base_uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriParseUriA(base_state.PtrBefore(), c_base_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&base_uri));
+  ParseUri(c_base_uri, base_state, &base_uri);
+  absl::Cleanup base_uri_cleanup = [this, &base_uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(base_uri.PtrNone()));
+  };
 
   sapi::v::Struct<UriUriA> newuri;
   SAPI_ASSERT_OK_AND_ASSIGN(
-      ret,
+      int ret,
       api_->uriRemoveBaseUriA(newuri.PtrAfter(), uri.PtrNone(),
                              base_uri.PtrBefore(), false));
   ASSERT_EQ(ret, 0);
+  absl::Cleanup newuri_cleanup = [this, &newuri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(newuri.PtrNone()));
+  };
 
   // GetUri
   sapi::v::Int size;
@@ -825,23 +760,17 @@ TEST_P(UriParserTestData, TestRemoveBaseExample) {
   std::string actual(buf.GetData());
   ASSERT_EQ(actual, tv.remove_base_example);
 
-  SAPI_ASSERT_OK(api_->uriFreeUriMembersA(newuri.PtrNone())); // TODO
 }
 
 TEST_P(UriParserTestData, TestPath) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   // get path
   std::vector<std::string> actual;
@@ -878,18 +807,13 @@ TEST_P(UriParserTestData, TestPath) {
 
 TEST_P(UriParserTestData, TestQueryElements) {
   const TestVariant& tv = GetParam();
-
   sapi::v::ConstCStr c_uri(tv.test.c_str());
-  sapi::v::Struct<UriUriA> uri;
   sapi::v::Struct<UriParserStateA> state;
-  SAPI_ASSERT_OK(sandbox_->Allocate(&uri, true));
-  state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri.GetRemote());
-
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
-
-  SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&uri));
+  sapi::v::Struct<UriUriA> uri;
+  ParseUri(c_uri, state, &uri);
+  absl::Cleanup uri_cleanup = [this, &uri] {
+    SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
+  };
 
   // get query elements
   //SAPI_ASSERT_OK_AND_ASSIGN(auto ret, uri.GetQueryElements());
@@ -906,7 +830,7 @@ TEST_P(UriParserTestData, TestQueryElements) {
       const_cast<char*>(uri.mutable_data()->query.afterLast));
 
   SAPI_ASSERT_OK_AND_ASSIGN(
-      ret,
+      int ret,
       api_->uriDissectQueryMallocA(query_ptr.PtrAfter(), query_count.PtrAfter(),
                                   &first, &afterLast));
   ASSERT_EQ(ret, 0);
