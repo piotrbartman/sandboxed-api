@@ -320,20 +320,27 @@ const struct TestVariant {
 class UriParserBase : public testing::Test {
  protected:
   void SetUp() override;
+  void TearDown() override;
   void ParseUri(sapi::v::ConstCStr&, sapi::v::Struct<UriParserStateA>&,
                 sapi::v::Struct<UriUriA>*);
   void GetUriString(std::string&, sapi::v::Struct<UriUriA>*);
-  std::unique_ptr<UriparserSapiSandbox> sandbox_;
-  std::unique_ptr<UriparserApi> api_;
+  UriparserSapiSandbox* sandbox_;
+  UriparserApi* api_;
 };
 
 class UriParserTestData : public UriParserBase,
                           public testing::WithParamInterface<TestVariant> {};
 
 void UriParserBase::SetUp() {
-  sandbox_ = std::make_unique<UriparserSapiSandbox>();
+  sandbox_ = new UriparserSapiSandbox();
   ASSERT_THAT(sandbox_->Init(), IsOk());
-  api_ = std::make_unique<UriparserApi>(sandbox_.get());
+  api_ = new UriparserApi(sandbox_);
+}
+
+void UriParserBase::TearDown() {
+  delete api_;
+  delete sandbox_;
+  testing::Test::TearDown();
 }
 
 void UriParserBase::ParseUri(
