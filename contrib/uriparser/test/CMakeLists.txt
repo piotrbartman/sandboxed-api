@@ -18,7 +18,6 @@ add_executable(
   sapi_uriparser_test
 
   test_uriparser.cc
-  ../utils/utils_uriparser.cc
 )
 
 
@@ -27,6 +26,7 @@ target_link_libraries(
 
   sapi_uriparser
   sapi::test_main
+  uriparser
 )
 
 gtest_discover_tests(sapi_uriparser_test)
