@@ -21,6 +21,7 @@
 #include "sandboxed_api/util/status_matchers.h"
 #include "sandboxed_api/util/temp_file.h"
 
+#include "absl/status/status_matchers.h"
 #include "absl/cleanup/cleanup.h"
 // avoid naming conflicts between the raw and the sandboxed API
 namespace raw {
@@ -322,9 +323,13 @@ const struct TestVariant {
 };
 
 class UriParserBase : public testing::Test {
+ public:
+  UriParserBase() {
+    sandbox_ = new UriparserSapiSandbox();
+    EXPECT_THAT(sandbox_->Init(), IsOk());
+    api_ = new UriparserApi(sandbox_);
+  }
  protected:
-  void SetUp() override;
-  void TearDown() override;
   void ParseUri(sapi::v::ConstCStr&, sapi::v::Struct<UriParserStateA>&,
                 sapi::v::Struct<UriUriA>*);
   void GetUriString(std::string&, sapi::v::Struct<UriUriA>*);
@@ -335,44 +340,28 @@ class UriParserBase : public testing::Test {
 class UriParserTestData : public UriParserBase,
                           public testing::WithParamInterface<TestVariant> {};
 
-void UriParserBase::SetUp() {
-  sandbox_ = new UriparserSapiSandbox();
-  ASSERT_THAT(sandbox_->Init(), IsOk());
-  api_ = new UriparserApi(sandbox_);
-}
-
-void UriParserBase::TearDown() {
-  delete api_;
-  delete sandbox_;
-  testing::Test::TearDown();
-}
-
 void UriParserBase::ParseUri(
     sapi::v::ConstCStr& c_uri,
     sapi::v::Struct<UriParserStateA>& state,
     sapi::v::Struct<UriUriA>* uri_) {
   SAPI_ASSERT_OK(sandbox_->Allocate(uri_, true));
   state.mutable_data()->uri = reinterpret_cast<UriUriA*>(uri_->GetRemote());
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriParseUriA(state.PtrBefore(), c_uri.PtrBefore()),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
   SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(uri_));
 }
 
 void UriParserBase::GetUriString(
     std::string& actual, sapi::v::Struct<UriUriA>* uri_) {
   sapi::v::Int size;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret,
-      api_->uriToStringCharsRequiredA(uri_->PtrNone(), size.PtrAfter()));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringCharsRequiredA(uri_->PtrNone(), size.PtrAfter()),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   sapi::v::Array<char> buf(size.GetValue() + 1);
 
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringA(
-               buf.PtrAfter(), uri_->PtrNone(), buf.GetSize(), nullptr));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringA(
+                  buf.PtrAfter(), uri_->PtrNone(), buf.GetSize(), nullptr),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   actual = std::string(buf.GetData());
 }
@@ -389,21 +378,18 @@ class UriParserTestDataRaw : public UriParserBaseRaw,
 void UriParserBaseRaw::ParseUri(
     const char* c_uri, raw::UriParserStateA& state, raw::UriUriA* uri_) {
   state.uri = uri_;
-  int ret = raw::uriParseUriA(&state, c_uri);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(raw::uriParseUriA(&state, c_uri), 0);
 }
 
 void UriParserBaseRaw::GetUriString(
     std::string& actual, raw::UriUriA* uri_) {
   int size;
-  int ret = raw::uriToStringCharsRequiredA(uri_, &size);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(raw::uriToStringCharsRequiredA(uri_, &size), 0);
   char* buf = new char[size + 1];
-  ret = uriToStringA(buf, uri_, size + 1, nullptr);
-  ASSERT_EQ(ret, 0);
+  absl::Cleanup buf_cleanup = [&buf] {delete[] buf;};
+  ASSERT_EQ(uriToStringA(buf, uri_, size + 1, nullptr), 0);
 
   actual = std::string(buf);
-  delete[] buf;
 }
 
 TEST_P(UriParserTestData, TestUri) {
@@ -446,6 +432,8 @@ TEST_P(UriParserTestData, TestUriEscaped) {
   std::string uri_str;
   GetUriString(uri_str, &uri);
 
+  // Be sure to allocate *6 times* the space of the input buffer for
+  // *6 times* for _normalizeBreaks == URI_TRUE_
   int space = uri_str.length() * 6 + 1;
 
   sapi::v::Array<char> bufout(space);
@@ -473,12 +461,12 @@ TEST_P(UriParserTestDataRaw, TestUriEscapedRaw) {
   int space = uri_str.length() * 6 + 1;
 
   char* bufout = new char[space];
+  absl::Cleanup bufout_cleanup = [&bufout] {delete[] bufout;};
   const char* bufin = uri_str.c_str();
 
   raw::uriEscapeA(bufin, bufout, true, true);
 
   std::string actual(bufout);
-  delete[] bufout;
   ASSERT_EQ(actual, tv.uriescaped);
 }
 
@@ -529,12 +517,12 @@ TEST_P(UriParserTestData, TestUserInfo) {
   };
 
   UriTextRangeA* part = &uri.mutable_data()->userInfo;
-  if (part != nullptr and part->first != nullptr) {
-  	size_t size = part->afterLast - part->first;
-  	SAPI_ASSERT_OK_AND_ASSIGN(
-    	std::string uri_str,
-      	sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
-  	std::string actual(uri_str.substr(0, size));
+  if (part != nullptr && part->first != nullptr) {
+    size_t size = part->afterLast - part->first;
+    SAPI_ASSERT_OK_AND_ASSIGN(
+      std::string uri_str,
+        sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
+    std::string actual(uri_str.substr(0, size));
     ASSERT_EQ(actual, tv.userinfo);
   } else {
     ASSERT_EQ("", tv.userinfo);
@@ -570,12 +558,12 @@ TEST_P(UriParserTestData, TestHostText) {
     SAPI_ASSERT_OK(api_->uriFreeUriMembersA(uri.PtrNone()));
   };
   UriTextRangeA* part = &uri.mutable_data()->hostText;
-  if (part != nullptr and part->first != nullptr) {
-  	size_t size = part->afterLast - part->first;
-  	SAPI_ASSERT_OK_AND_ASSIGN(
-    	std::string uri_str,
-      	sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
-  	std::string actual(uri_str.substr(0, size));
+  if (part != nullptr && part->first != nullptr) {
+    size_t size = part->afterLast - part->first;
+    SAPI_ASSERT_OK_AND_ASSIGN(
+      std::string uri_str,
+        sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
+    std::string actual(uri_str.substr(0, size));
     ASSERT_EQ(actual, tv.hosttext);
   } else {
     ASSERT_EQ("", tv.hosttext);
@@ -612,16 +600,16 @@ TEST_P(UriParserTestData, TestHostIP) {
 
   char ipstr[INET6_ADDRSTRLEN] = "";
 
-  if (uri.mutable_data()->hostData.ip4) {
+  if (uri.data().hostData.ip4) {
     sapi::v::Struct<UriIp4> ip4;
-    ip4.SetRemote(uri.mutable_data()->hostData.ip4);
+    ip4.SetRemote(uri.data().hostData.ip4);
     SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&ip4));
-    inet_ntop(AF_INET, ip4.mutable_data()->data, ipstr, sizeof(ipstr));
-  } else if (uri.mutable_data()->hostData.ip6) {
+    inet_ntop(AF_INET, ip4.data().data, ipstr, sizeof(ipstr));
+  } else if (uri.data().hostData.ip6) {
     sapi::v::Struct<UriIp6> ip6;
-    ip6.SetRemote(uri.mutable_data()->hostData.ip6);
+    ip6.SetRemote(uri.data().hostData.ip6);
     SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&ip6));
-    inet_ntop(AF_INET6, ip6.mutable_data()->data, ipstr, sizeof(ipstr));
+    inet_ntop(AF_INET6, ip6.data().data, ipstr, sizeof(ipstr));
   }
   ASSERT_EQ(ipstr, tv.hostip);
 }
@@ -656,12 +644,12 @@ TEST_P(UriParserTestData, TestPortText) {
   };
 
   UriTextRangeA* part = &uri.mutable_data()->portText;
-  if (part != nullptr and part->first != nullptr) {
-  	size_t size = part->afterLast - part->first;
-  	SAPI_ASSERT_OK_AND_ASSIGN(
-    	std::string uri_str,
-      	sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
-  	std::string actual(uri_str.substr(0, size));
+  if (part != nullptr && part->first != nullptr) {
+    size_t size = part->afterLast - part->first;
+    SAPI_ASSERT_OK_AND_ASSIGN(
+      std::string uri_str,
+        sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
+    std::string actual(uri_str.substr(0, size));
     ASSERT_EQ(actual, tv.porttext);
   } else {
     ASSERT_EQ("", tv.porttext);
@@ -698,12 +686,12 @@ TEST_P(UriParserTestData, TestQuery) {
   };
 
   UriTextRangeA* part = &uri.mutable_data()->query;
-  if (part != nullptr and part->first != nullptr) {
-  	size_t size = part->afterLast - part->first;
-  	SAPI_ASSERT_OK_AND_ASSIGN(
-    	std::string uri_str,
-      	sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
-  	std::string actual(uri_str.substr(0, size));
+  if (part != nullptr && part->first != nullptr) {
+    size_t size = part->afterLast - part->first;
+    SAPI_ASSERT_OK_AND_ASSIGN(
+      std::string uri_str,
+        sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
+    std::string actual(uri_str.substr(0, size));
     ASSERT_EQ(actual, tv.query);
   } else {
     ASSERT_EQ("", tv.query);
@@ -740,12 +728,12 @@ TEST_P(UriParserTestData, TestFragment) {
   };
 
   UriTextRangeA* part = &uri.mutable_data()->fragment;
-  if (part != nullptr and part->first != nullptr) {
-  	size_t size = part->afterLast - part->first;
-  	SAPI_ASSERT_OK_AND_ASSIGN(
-    	std::string uri_str,
-      	sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
-  	std::string actual(uri_str.substr(0, size));
+  if (part != nullptr && part->first != nullptr) {
+    size_t size = part->afterLast - part->first;
+    SAPI_ASSERT_OK_AND_ASSIGN(
+      std::string uri_str,
+        sandbox_->GetCString(sapi::v::RemotePtr(const_cast<char*>(part->first))));
+    std::string actual(uri_str.substr(0, size));
     ASSERT_EQ(actual, tv.fragment);
   } else {
     ASSERT_EQ("", tv.fragment);
@@ -783,22 +771,18 @@ TEST_P(UriParserTestData, TestNormalize) {
 
   SAPI_ASSERT_OK_AND_ASSIGN(
       int norm_mask, api_->uriNormalizeSyntaxMaskRequiredA(uri.PtrNone()));
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   sapi::v::Int size;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringCharsRequiredA(uri.PtrNone(), size.PtrAfter()));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringCharsRequiredA(uri.PtrNone(), size.PtrAfter()),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   sapi::v::Array<char> buf(size.GetValue() + 1);
 
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret,
-      api_->uriToStringA(buf.PtrAfter(), uri.PtrNone(), buf.GetSize(), nullptr)
-  );
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringA(
+                  buf.PtrAfter(), uri.PtrNone(), buf.GetSize(), nullptr),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   std::string actual(buf.GetData());
   ASSERT_EQ(actual, tv.normalized);
@@ -814,20 +798,17 @@ TEST_P(UriParserTestDataRaw, TestNormalizeRaw) {
   };
 
   int norm_mask = uriNormalizeSyntaxMaskRequiredA(&uri);
-  int ret = uriNormalizeSyntaxExA(&uri, norm_mask);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriNormalizeSyntaxExA(&uri, norm_mask), 0);
 
   int size;
-  ret = uriToStringCharsRequiredA(&uri, &size);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringCharsRequiredA(&uri, &size), 0);
 
   char* buf = new char[size + 1];
+  absl::Cleanup buf_cleanup = [&buf] {delete[] buf;};
 
-  ret = uriToStringA(buf, &uri, size + 1, nullptr);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringA(buf, &uri, size + 1, nullptr), 0);
 
   std::string actual(buf);
-  delete[] buf;
   ASSERT_EQ(actual, tv.normalized);
 }
 
@@ -843,7 +824,7 @@ TEST_P(UriParserTestData, TestMultiple) {
 
   // get query
   UriTextRangeA* part = &uri.mutable_data()->query;
-  if (part != nullptr and part->first != nullptr) {
+  if (part != nullptr && part->first != nullptr) {
     size_t size = part->afterLast - part->first;
     SAPI_ASSERT_OK_AND_ASSIGN(
       std::string uri_str,
@@ -873,23 +854,19 @@ TEST_P(UriParserTestData, TestMultiple) {
   // normalize syntax
   SAPI_ASSERT_OK_AND_ASSIGN(
         int norm_mask, api_->uriNormalizeSyntaxMaskRequiredA(uri.PtrNone()));
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret, api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriNormalizeSyntaxExA(uri.PtrAfter(), norm_mask),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   // GetUri
   sapi::v::Int size;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringCharsRequiredA(uri.PtrNone(), size.PtrAfter()));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringCharsRequiredA(uri.PtrNone(), size.PtrAfter()),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   sapi::v::Array<char> buf(size.GetValue() + 1);
 
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret,
-      api_->uriToStringA(buf.PtrAfter(), uri.PtrNone(), buf.GetSize(), nullptr)
-  );
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringA(
+                  buf.PtrAfter(), uri.PtrNone(), buf.GetSize(), nullptr),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   std::string actual(buf.GetData());
   ASSERT_EQ(actual, tv.normalized);
@@ -926,21 +903,18 @@ TEST_P(UriParserTestDataRaw, TestMultipleRaw) {
 
   // normalize syntax
   int norm_mask = uriNormalizeSyntaxMaskRequiredA(&uri);
-  int ret = uriNormalizeSyntaxExA(&uri, norm_mask);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriNormalizeSyntaxExA(&uri, norm_mask), 0);
 
   // GetUri
   int size;
-  ret = uriToStringCharsRequiredA(&uri, &size);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringCharsRequiredA(&uri, &size), 0);
 
   char* buf = new char[size + 1];
+  absl::Cleanup buf_cleanup = [&buf] {delete[] buf;};
 
-  ret = uriToStringA(buf, &uri, size + 1, nullptr);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringA(buf, &uri, size + 1, nullptr), 0);
 
   std::string actual(buf);
-  delete[] buf;
   ASSERT_EQ(actual, tv.normalized);
 }
 
@@ -964,28 +938,24 @@ TEST_P(UriParserTestData, TestAddBaseExample) {
   };
 
   sapi::v::Struct<UriUriA> newuri;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret,
-      api_->uriAddBaseUriA(
-          newuri.PtrAfter(), uri.PtrNone(), base_uri.PtrBefore()));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriAddBaseUriA(
+                  newuri.PtrAfter(), uri.PtrNone(), base_uri.PtrBefore()),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
   absl::Cleanup newuri_cleanup = [this, &newuri] {
     SAPI_ASSERT_OK(api_->uriFreeUriMembersA(newuri.PtrNone()));
   };
 
   // GetUri
   sapi::v::Int size;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringCharsRequiredA(newuri.PtrNone(), size.PtrAfter()));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringCharsRequiredA(
+                  newuri.PtrNone(), size.PtrAfter()),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   sapi::v::Array<char> buf(size.GetValue() + 1);
 
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret,
-      api_->uriToStringA(buf.PtrAfter(), newuri.PtrNone(), buf.GetSize(), nullptr)
-  );
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringA(
+                  buf.PtrAfter(), newuri.PtrNone(), buf.GetSize(), nullptr),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   std::string actual(buf.GetData());
   ASSERT_EQ(actual, tv.add_base_example);
@@ -1011,24 +981,21 @@ TEST_P(UriParserTestDataRaw, TestAddBaseExampleRaw) {
   };
 
   raw::UriUriA newuri;
-  int ret = uriAddBaseUriA(&newuri, &uri, &base_uri);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriAddBaseUriA(&newuri, &uri, &base_uri), 0);
   absl::Cleanup newuri_cleanup = [&newuri] {
     uriFreeUriMembersA(&newuri);
   };
 
   // GetUri
   int size;
-  ret = uriToStringCharsRequiredA(&newuri, &size);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringCharsRequiredA(&newuri, &size), 0);
 
   char* buf = new char[size + 1];
+  absl::Cleanup buf_cleanup = [&buf] {delete[] buf;};
 
-  ret = uriToStringA(buf, &newuri, size + 1, nullptr);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringA(buf, &newuri, size + 1, nullptr), 0);
 
   std::string actual(buf);
-  delete[] buf;
   ASSERT_EQ(actual, tv.add_base_example);
 }
 
@@ -1052,28 +1019,24 @@ TEST_P(UriParserTestData, TestRemoveBaseExample) {
   };
 
   sapi::v::Struct<UriUriA> newuri;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret,
-      api_->uriRemoveBaseUriA(newuri.PtrAfter(), uri.PtrNone(),
-                             base_uri.PtrBefore(), false));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriRemoveBaseUriA(newuri.PtrAfter(), uri.PtrNone(),
+                                      base_uri.PtrBefore(), false),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
   absl::Cleanup newuri_cleanup = [this, &newuri] {
     SAPI_ASSERT_OK(api_->uriFreeUriMembersA(newuri.PtrNone()));
   };
 
   // GetUri
   sapi::v::Int size;
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret, api_->uriToStringCharsRequiredA(newuri.PtrNone(), size.PtrAfter()));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringCharsRequiredA(
+                  newuri.PtrNone(), size.PtrAfter()),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   sapi::v::Array<char> buf(size.GetValue() + 1);
 
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      ret,
-      api_->uriToStringA(buf.PtrAfter(), newuri.PtrNone(), buf.GetSize(), nullptr)
-  );
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriToStringA(
+                  buf.PtrAfter(), newuri.PtrNone(), buf.GetSize(), nullptr),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
 
   std::string actual(buf.GetData());
   ASSERT_EQ(actual, tv.remove_base_example);
@@ -1098,24 +1061,21 @@ TEST_P(UriParserTestDataRaw, TestRemoveBaseExampleRaw) {
   };
 
   raw::UriUriA newuri;
-  int ret = uriRemoveBaseUriA(&newuri, &uri, &base_uri, false);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriRemoveBaseUriA(&newuri, &uri, &base_uri, false), 0);
   absl::Cleanup newuri_cleanup = [&newuri] {
     uriFreeUriMembersA(&newuri);
   };
 
   // GetUri
   int size;
-  ret = uriToStringCharsRequiredA(&newuri, &size);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringCharsRequiredA(&newuri, &size), 0);
 
   char* buf = new char[size + 1];
+  absl::Cleanup buf_cleanup = [&buf] {delete[] buf;};
 
-  ret = uriToStringA(buf, &newuri, size + 1, nullptr);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(uriToStringA(buf, &newuri, size + 1, nullptr), 0);
 
   std::string actual(buf);
-  delete[] buf;
   ASSERT_EQ(actual, tv.remove_base_example);
 }
 
@@ -1141,7 +1101,7 @@ TEST_P(UriParserTestData, TestPath) {
       SAPI_ASSERT_OK(sandbox_->TransferFromSandboxee(&path_segment));
 
       UriTextRangeA* part = &path_segment.mutable_data()->text;
-      if (part != nullptr and part->first != nullptr) {
+      if (part != nullptr && part->first != nullptr) {
         size_t size = part->afterLast - part->first;
         SAPI_ASSERT_OK_AND_ASSIGN(
           std::string uri_str,
@@ -1206,7 +1166,6 @@ TEST_P(UriParserTestData, TestQueryElements) {
   };
 
   // get query elements
-  //SAPI_ASSERT_OK_AND_ASSIGN(auto ret, uri.GetQueryElements());
   absl::btree_map<std::string, std::string> actual;
 
   if (uri.mutable_data()->query.first == nullptr) {
@@ -1219,11 +1178,10 @@ TEST_P(UriParserTestData, TestQueryElements) {
   sapi::v::RemotePtr afterLast(
       const_cast<char*>(uri.mutable_data()->query.afterLast));
 
-  SAPI_ASSERT_OK_AND_ASSIGN(
-      int ret,
-      api_->uriDissectQueryMallocA(query_ptr.PtrAfter(), query_count.PtrAfter(),
-                                  &first, &afterLast));
-  ASSERT_EQ(ret, 0);
+  ASSERT_THAT(api_->uriDissectQueryMallocA(query_ptr.PtrAfter(),
+                                           query_count.PtrAfter(), &first,
+                                           &afterLast),
+              absl_testing::IsOkAndHolds(testing::Eq(0)));
   absl::Cleanup query_list_cleanup = [this, &query_ptr] {
     sapi::v::RemotePtr rptr(query_ptr[0]);
     SAPI_ASSERT_OK(api_->uriFreeQueryListA(&rptr));
@@ -1278,12 +1236,11 @@ TEST_P(UriParserTestDataRaw, TestQueryElementsRaw) {
 
   raw::UriQueryListA** query_ptr = new raw::UriQueryListA*[1];
   int query_count;
-  int ret = raw::uriDissectQueryMallocA(
-      query_ptr, &query_count, uri.query.first, uri.query.afterLast);
-  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(raw::uriDissectQueryMallocA(
+      query_ptr, &query_count, uri.query.first, uri.query.afterLast), 0);
   absl::Cleanup query_list_cleanup = [&query_ptr] {
     raw::uriFreeQueryListA(*query_ptr);
-	delete[] query_ptr;
+    delete[] query_ptr;
   };
 
   raw::UriQueryListA* obj = query_ptr[0];
